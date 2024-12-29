@@ -6,14 +6,14 @@ from app.db.config import Database
 from app.core.auth import AuthHandler
 from bson import ObjectId
 from app.core.config import settings as config_settings
-from app.services.google_auth import GoogleAuthService
+from app.services.google_auth import verify_google_token
 from app.core.auth import AuthHandler
 from jose import jwt, JWTError
-from app.models.user import AuthProvider
+# from app.models.user import AuthProvider
 from app.models.auth import GoogleAuthRequest, SocialProfile
 
 router = APIRouter()
-google_auth_service = GoogleAuthService()
+# google_auth_service = GoogleAuthService()
 
 @router.post("/register", response_model=UserInDB)
 async def register(user: UserCreate):
@@ -105,80 +105,99 @@ async def refresh_token(refresh_token: str):
 
 
 
-@router.get("/google/url")
-async def google_auth_url():
-    """Get the Google OAuth URL for client-side redirect."""
-    return {"url": await google_auth_service.get_oauth_url()}
+# @router.get("/google/url")
+# async def google_auth_url():
+#     """Get the Google OAuth URL for client-side redirect."""
+#     return {"url": await google_auth_service.get_oauth_url()}
 
-@router.get("/google/callback", response_model=Token)
-async def google_callback(auth_request: GoogleAuthRequest):
-    """Handle Google OAuth callback and create/login user."""
-    try:
+# @router.get("/google/callback", response_model=Token)
+# async def google_callback(auth_request: GoogleAuthRequest):
+#     """Handle Google OAuth callback and create/login user."""
+#     try:
         
-        print("auth request: ", auth_request)
-        # Exchange code for tokens
-        tokens = await google_auth_service.exchange_code_for_token(auth_request.code)
-        access_token = tokens["access_token"]
+#         print("auth request: ", auth_request)
+#         # Exchange code for tokens
+#         tokens = await google_auth_service.exchange_code_for_token(auth_request.code)
+#         access_token = tokens["access_token"]
         
-        # Get user profile from Google
-        profile = await google_auth_service.get_user_profile(access_token)
+#         # Get user profile from Google
+#         profile = await google_auth_service.get_user_profile(access_token)
         
-        # Get database instance
-        db = await Database.get_db()
+#         # Get database instance
+#         db = await Database.get_db()
         
-        # Check if user exists
-        user = await db.users.find_one({
-            "email": profile.email,
-            "auth_provider": AuthProvider.GOOGLE
-        })
+#         # Check if user exists
+#         user = await db.users.find_one({
+#             "email": profile.email,
+#             "auth_provider": AuthProvider.GOOGLE
+#         })
         
-        if not user:
-            # Create new user
-            user = {
-                "email": profile.email,
-                "full_name": profile.full_name,
-                "auth_provider": AuthProvider.GOOGLE,
-                "provider_user_id": profile.provider_user_id,
-                "is_active": True,
-                "is_verified": True,  # Auto-verify Google users
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
-                "last_login": datetime.utcnow(),
-                "profile_picture": profile.picture
-            }
-            result = await db.users.insert_one(user)
-            user["_id"] = result.inserted_id
-        else:
-            # Update existing user's last login and profile
-            await db.users.update_one(
-                {"_id": user["_id"]},
-                {
-                    "$set": {
-                        "last_login": datetime.utcnow(),
-                        "full_name": profile.full_name,
-                        "profile_picture": profile.picture,
-                        "updated_at": datetime.utcnow()
-                    }
-                }
-            )
+#         if not user:
+#             # Create new user
+#             user = {
+#                 "email": profile.email,
+#                 "full_name": profile.full_name,
+#                 "auth_provider": AuthProvider.GOOGLE,
+#                 "provider_user_id": profile.provider_user_id,
+#                 "is_active": True,
+#                 "is_verified": True,  # Auto-verify Google users
+#                 "created_at": datetime.utcnow(),
+#                 "updated_at": datetime.utcnow(),
+#                 "last_login": datetime.utcnow(),
+#                 "profile_picture": profile.picture
+#             }
+#             result = await db.users.insert_one(user)
+#             user["_id"] = result.inserted_id
+#         else:
+#             # Update existing user's last login and profile
+#             await db.users.update_one(
+#                 {"_id": user["_id"]},
+#                 {
+#                     "$set": {
+#                         "last_login": datetime.utcnow(),
+#                         "full_name": profile.full_name,
+#                         "profile_picture": profile.picture,
+#                         "updated_at": datetime.utcnow()
+#                     }
+#                 }
+#             )
         
-        # Generate JWT tokens
-        access_token_expires = timedelta(minutes=config_settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        refresh_token_expires = timedelta(days=config_settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+#         # Generate JWT tokens
+#         access_token_expires = timedelta(minutes=config_settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+#         refresh_token_expires = timedelta(days=config_settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
         
-        access_token = AuthHandler.create_token(
-            data={"sub": str(user["_id"])},
-            expires_delta=access_token_expires
-        )
-        refresh_token = AuthHandler.create_token(
-            data={"sub": str(user["_id"]), "refresh": True},
-            expires_delta=refresh_token_expires
-        )
+#         access_token = AuthHandler.create_token(
+#             data={"sub": str(user["_id"])},
+#             expires_delta=access_token_expires
+#         )
+#         refresh_token = AuthHandler.create_token(
+#             data={"sub": str(user["_id"]), "refresh": True},
+#             expires_delta=refresh_token_expires
+#         )
         
-        return Token(access_token=access_token, refresh_token=refresh_token)
+#         return Token(access_token=access_token, refresh_token=refresh_token)
         
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Google authentication failed: {str(e)}"
-        )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=f"Google authentication failed: {str(e)}"
+#         )
+        
+        
+@router.post("/google")
+def authenticate_with_google(auth_request: GoogleAuthRequest):
+    """
+    Endpoint to handle Google Sign-In.
+    """
+    token_data = verify_google_token(auth_request.id_token)
+    
+    # Extract user information from token_data
+    user_info = {
+        "user_id": token_data["sub"],
+        "email": token_data["email"],
+        "name": token_data.get("name"),
+        "picture": token_data.get("picture"),
+    }
+    
+    # Handle user login or registration logic here
+    return {"message": "Login successful", "user": user_info}
