@@ -1,8 +1,10 @@
+from fastapi import logger
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import IndexModel, ASCENDING
 from datetime import datetime
 from app.core.config import settings
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
 class Database:
@@ -41,11 +43,13 @@ class Database:
     
     @classmethod
     async def close_db(cls):
-        if cls.client:
+        if cls.client is not None:
             await cls.client.close()
+        else:
+            logging.warning("Attempted to close a database connection, but no client was initialized.")
     
     @classmethod
     async def get_db(cls):
-        if not cls.client:
+        if cls.client is None:
             await cls.connect_db()
         return cls.client.flight_tracker

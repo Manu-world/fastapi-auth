@@ -2,13 +2,7 @@ from fastapi import HTTPException
 import requests
 from app.core.config import settings
 
-
-
-# Your Google OAuth Client ID
 GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
-
-
-
 
 def verify_google_token(id_token: str):
     """
