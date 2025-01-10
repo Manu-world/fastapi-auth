@@ -4,11 +4,11 @@ from fastapi import HTTPException, status
 from jose import jwt, JWTError
 
 from app.models.user import UserCreate, Token, UserInDB, AuthProvider
-from app.models.auth import GoogleAuthRequest
+from app.models.auth import GoogleAuthRequest, AppleAuthRequest
 from app.core.auth import AuthHandler
 from app.core.config import settings as config_settings
 from app.db.config import Database
-from app.services.google_auth import verify_google_token
+from app.services.social_auth import SocialAuth
 
 class AuthService:
     def __init__(self):
@@ -85,7 +85,7 @@ class AuthService:
     
     async def authenticate_with_google(self, auth_request: GoogleAuthRequest) -> Token:
         """Handle Google Sign-In authentication."""
-        token_data = verify_google_token(auth_request.id_token)
+        token_data = SocialAuth.verify_google_token(auth_request.id_token)
         
         user_info = {
             "email": token_data["email"],
@@ -94,10 +94,28 @@ class AuthService:
             "profile_picture": token_data.get("picture"),
         }
         
+        return await self._handle_social_auth(user_info, AuthProvider.GOOGLE)
+
+    async def authenticate_with_apple(self, auth_request: AppleAuthRequest) -> Token:
+        """Handle Apple Sign-In authentication."""
+        token_data = SocialAuth.verify_apple_token(auth_request.id_token)
+        
+        # Extract user info from Apple ID token
+        user_info = {
+            "email": token_data.get("email"),
+            "full_name": auth_request.full_name,  
+            "provider_user_id": token_data["sub"],
+            "profile_picture": None,  
+        }
+        
+        return await self._handle_social_auth(user_info, AuthProvider.APPLE)
+
+    async def _handle_social_auth(self, user_info: dict, provider: AuthProvider) -> Token:
+        """Common handler for social authentication."""
         db = await self._get_db()
         user = await db.users.find_one({
             "email": user_info["email"],
-            "auth_provider": AuthProvider.GOOGLE
+            "auth_provider": provider
         })
         
         current_time = datetime.utcnow()
@@ -106,7 +124,7 @@ class AuthService:
             user_info.update({
                 "is_active": True,
                 "is_verified": True,
-                "auth_provider": AuthProvider.GOOGLE,
+                "auth_provider": provider,
                 "created_at": current_time,
                 "updated_at": current_time,
                 "last_login": current_time
@@ -115,16 +133,20 @@ class AuthService:
             result = await db.users.insert_one(user_info)
             user_id = str(result.inserted_id)
         else:
+            update_data = {
+                "last_login": current_time,
+                "updated_at": current_time
+            }
+            
+            # Only update these fields if they exist in user_info
+            if user_info.get("full_name"):
+                update_data["full_name"] = user_info["full_name"]
+            if user_info.get("profile_picture"):
+                update_data["profile_picture"] = user_info["profile_picture"]
+                
             await db.users.update_one(
                 {"_id": user["_id"]},
-                {
-                    "$set": {
-                        "last_login": current_time,
-                        "full_name": user_info["full_name"],
-                        "profile_picture": user_info["profile_picture"],
-                        "updated_at": current_time
-                    }
-                }
+                {"$set": update_data}
             )
             user_id = str(user["_id"])
         

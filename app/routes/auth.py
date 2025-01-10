@@ -1,6 +1,6 @@
 # routes/auth.py
 from fastapi import APIRouter
-from app.models.auth import GoogleAuthRequest
+from app.models.auth import AppleAuthRequest, GoogleAuthRequest, LoginRequest
 from app.models.user import UserCreate
 from app.schema.auth import StandardResponse
 from app.services.auth_service import AuthService
@@ -25,10 +25,10 @@ async def register(user: UserCreate):
         )
 
 @router.post("/login", response_model=StandardResponse)
-async def login(email: str, password: str):
+async def login(login_request: LoginRequest):
     """Authenticate user with email and password."""
     try:
-        token = await auth_service.login_user(email, password)
+        token = await auth_service.login_user(login_request.email, login_request.password)
         return StandardResponse(
             status=True,
             data=token,
@@ -70,4 +70,19 @@ async def authenticate_with_google(auth_request: GoogleAuthRequest):
         return StandardResponse(
             status=False,
             message=f"Google authentication failed: {str(e)}"
+        )
+        
+@router.post("/apple", response_model=StandardResponse)
+async def authenticate_with_apple(auth_request: AppleAuthRequest):
+    try:
+        token = await auth_service.authenticate_with_apple(auth_request)
+        return StandardResponse(
+            status=True,
+            data=token,
+            message="Apple authentication successful"
+        )
+    except Exception as e:
+        return StandardResponse(
+            status=False,
+            message=f"Apple authentication failed: {str(e)}"
         )

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
         "userinfo_uri": "https://www.googleapis.com/oauth2/v3/userinfo"
     }
     
+    # apple settings
+    BUNDLE_ID_IOS: str
+    
     class Config:
         env_file = ".env"
 
