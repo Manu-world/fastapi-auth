@@ -40,7 +40,7 @@ class AuthService:
         result = await db.users.insert_one(user_dict)
         user_dict["_id"] = str(result.inserted_id)
         
-        return UserInDB(**user_dict)
+        return self._create_tokens(str(user_dict["_id"]))
     
     async def login_user(self, email: str, password: str) -> Token:
         """Authenticate user with email and password."""

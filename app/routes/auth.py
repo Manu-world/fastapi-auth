@@ -1,7 +1,8 @@
 # routes/auth.py
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.core.auth import AuthHandler
 from app.models.auth import AppleAuthRequest, GoogleAuthRequest, LoginRequest
-from app.models.user import UserCreate
+from app.models.user import UserCreate, UserInDB, UserVerificationResponse
 from app.schema.auth import StandardResponse
 from app.services.auth_service import AuthService
 
@@ -85,4 +86,36 @@ async def authenticate_with_apple(auth_request: AppleAuthRequest):
         return StandardResponse(
             status=False,
             message=f"Apple authentication failed: {str(e)}"
+        )
+
+
+@router.get("/verify", response_model=StandardResponse)
+async def verify_token(current_user: UserInDB = Depends(AuthHandler.get_current_user)):
+    """
+    Verify the access token and return user details.
+    This endpoint requires a valid Bearer token in the Authorization header.
+    """
+    try:
+        # Convert the UserInDB model to UserVerificationResponse
+        user_data = UserVerificationResponse(
+            id=str(current_user.id),
+            email=current_user.email,
+            full_name=current_user.full_name,
+            phone_number=current_user.phone_number,
+            is_active=current_user.is_active,
+            is_verified=current_user.is_verified,
+            auth_provider=current_user.auth_provider,
+            created_at=current_user.created_at,
+            last_login=current_user.last_login
+        )
+        
+        return StandardResponse(
+            status=True,
+            data=user_data.model_dump(),
+            message="Token verified successfully"
+        )
+    except Exception as e:
+        return StandardResponse(
+            status=False,
+            message=f"Token verification failed: {str(e)}"
         )
